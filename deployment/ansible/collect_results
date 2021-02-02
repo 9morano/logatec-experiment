@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+
+DIR=deployment/ansible
+
+ansible-playbook $DIR/collect_results.yml

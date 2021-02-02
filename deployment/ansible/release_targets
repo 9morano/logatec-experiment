@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+
+DIR=deployment/ansible
+
+ansible-playbook $DIR/release_targets.yml

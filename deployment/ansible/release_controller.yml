@@ -1,0 +1,44 @@
+---
+- hosts: 172.17.0.1
+  remote_user: videk
+
+# Define number of nodes in use and duration of an application. Used in server.py for timeout so the controller doesn't hang. 
+# Just for backup - if all results came from devices, controller will finish its execution. 
+  vars:
+    nodes: 2
+    duration: 5
+
+  tasks:
+  - name: Create directory
+    file:
+      path: ~/deploy/logatec-experiment
+      state: directory
+
+# recursive will also download the submodules
+# on the version param you can change which branch to pull TODO
+  - name: Pull all changes from github
+    git:
+      repo: git@github.com:logatec3/logatec-experiment.git
+      dest: ~/deploy/logatec-experiment
+      recursive: no
+      update: yes
+      force: yes
+      depth: 1
+      version: master
+      
+# -f flag so we can later copy whole LOG-a-TEC directory into container
+# else we get error "Forbidden path outside the build context"
+  - name: Build docker file
+    command: docker build -t vesna-drivers -f deployment/docker/Dockerfile .
+    args:
+      chdir: ~/deploy/logatec-experiment
+
+  - name: Cleanup old docker container (controller)
+    ignore_errors: yes
+    command: "{{ item }}"
+    with_items:
+      - docker kill controller
+      - docker rm controller
+
+  - name: Run docker image
+    command: docker run --privileged --name controller -e TARGET=run_server -e NODES_NUM="{{nodes}}" -e APP_DURATION_MIN="{{duration}}" -p 50000:50000 vesna-drivers 

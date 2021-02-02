@@ -1,0 +1,75 @@
+---
+- hosts: 192.168.12.81, 192.168.12.83
+  remote_user: videk
+
+# Select which application to test, duration in minutes and which device should be the root of the network
+  vars:
+    application: 07_multicast
+    duration: 3
+    root_node: 192.168.12.83
+
+# Display experiment abstract in build.log 
+  tasks:
+  - name: Display abstract
+    debug:
+      msg: "Testing {{application}}, duration {{duration}} minutes, root node is {{root_node}}"
+    when: inventory_hostname == root_node
+
+  - name: Create directory
+    file:
+      path: ~/deploy/logatec-experiment
+      state: directory
+
+# Recursive option will also download the sub-modules
+# Update will pull the changes from Github
+# Force will delete local changes
+# Version you can change which branch to pull
+  - name: Pull changes from github
+    git:
+      repo: git@github.com:logatec3/logatec-experiment.git
+      dest: ~/deploy/logatec-experiment
+      recursive: no
+      update: yes
+      force: yes
+      depth: 1
+      version: master
+
+# It is better to download sub-modules separately, otherwise you get 95MB of data instead 28MB
+# Recursive option will download all sub-modules (also the ones from Contiki) which we don't need
+  - name: Update submodules
+    command: git submodule update --init
+    args:
+      chdir: ~/deploy/logatec-experiment
+
+# Delete potential local changes (since force option in git task doesn't work for submodules)
+  - name: Delete local changes
+    shell: "{{ item }} "
+    with_items:
+      #- cd ~/deploy/logatec-experiment && git clean -f -d
+      - cd ~/deploy/logatec-experiment/contiki-ng && git clean -f -d
+      - cd ~/deploy/logatec-experiment/vesna-drivers && git clean -f -d
+
+# -f flag so we can later copy whole LOG-a-TEC directory into container
+# with Dockerfile command COPY...else we get error "Forbidden path outside the build context"
+  - name: Build docker file
+    command: docker build -t vesna-drivers -f deployment/docker/Dockerfile .
+    args:
+      chdir: ~/deploy/logatec-experiment
+
+  - name: Cleanup old docker containers (target)
+    register: target
+    ignore_errors: yes
+    command: "{{ item }}"
+    with_items:
+      - docker kill target
+      - docker rm target
+
+    # Root node
+  - name: Run docker image for root
+    command: docker run -d --name target --privileged --net=host -it -e TARGET=run_experiment_root -e APP_DIR="{{application}}" -e APP_DURATION_MIN="{{duration}}" vesna-drivers
+    when: inventory_hostname == root_node
+
+    # Other nodes
+  - name: Run docker image
+    command: docker run -d --name target --privileged --net=host -it -e TARGET=run_experiment_node -e APP_DIR="{{application}}" -e APP_DURATION_MIN="{{duration}}" vesna-drivers
+    when: inventory_hostname != root_node

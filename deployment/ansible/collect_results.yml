@@ -1,0 +1,29 @@
+---
+- hosts: 172.17.0.1
+  remote_user: videk
+  tasks:
+
+  - name: Stop docker container (controller)
+    command: docker stop controller
+
+# Script server.py makes dir results where measurements are stored
+  - name: Copy file from the container
+    command: docker cp controller:/root/logatec-experiment/deployment/tasks/results/ .
+    args:
+      chdir: ~/deploy/logatec-experiment
+
+# Fetch measurements to videk container --> from there they will be forwarded to Github
+# On that container we have: videk-ci/<tag_name>/ folder...in it, there are logatec-experiment (a clone from
+# Github repo) and a folder out. We are calling this script from logatec-experiment/deployment/ansible, so dest:
+# is then ../../../out
+  - name: Fetch data file to out folder
+    synchronize:
+      src: "{{ item }}"
+      dest: ../../../out/
+      mode: pull
+    with_items: "~/deploy/logatec-experiment/results/*.txt"
+
+  - name: Delete results
+    file: 
+      path:  ~/deploy/logatec-experiment/results
+      state: absent

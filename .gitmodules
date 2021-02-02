@@ -1,3 +1,8 @@
 [submodule "contiki-ng"]
 	path = contiki-ng
 	url = https://github.com/gcerar/contiki-ng
+	branch = master
+[submodule "vesna-drivers"]
+	path = vesna-drivers
+	url = git@github.com:logatec3/vesna-drivers.git
+	branch = logatec-testbed
